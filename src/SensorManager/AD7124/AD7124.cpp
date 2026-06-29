@@ -225,8 +225,8 @@ int AD7124::noCheckReadRegister(uint8_t addr, uint32_t *value, uint8_t size) {
     
     // Ensure clock returns to idle (HIGH for Mode 3) and hold for transaction boundary
     gpio_pin_set(gpio_dev, sck_pin, 1);
-    // EDIT: was 500 now 25
-    k_usleep(25);  // Longer inter-transaction delay for 3-wire mode
+    // EDIT: was 500 then 25 (which produced 4x slower rate than expected)
+    // k_usleep(0);  // Longer inter-transaction delay for 3-wire mode
     
     // Build the result
     *value = 0;
@@ -428,14 +428,14 @@ int AD7124::setConfig(uint8_t setup, ReferenceSource ref, PGA gain, bool bipolar
 /**
  * @brief Configure filter for a setup
  */
-int AD7124::setFilter(uint8_t setup, FilterType filter_type, uint16_t fs, bool rej60) {
+int AD7124::setFilter(uint8_t setup, FilterType filter_type, uint16_t fs, bool rej60, bool single_cycle_settling) {
     if (setup > 7) {
         return -EINVAL;
     }
     
     uint32_t value = AD7124_FILT_REG_FILTER(static_cast<uint32_t>(filter_type)) |
                      AD7124_FILT_REG_FS(fs) |
-                     (rej60 ? AD7124_FILT_REG_REJ60 : 0);
+                     (rej60 ? AD7124_FILT_REG_REJ60 : 0) | (single_cycle_settling ? AD7124_FILT_REG_SINGLE_CYCLE : 0);
     
     // Update local register copy
     regs[33 + setup].value = value;

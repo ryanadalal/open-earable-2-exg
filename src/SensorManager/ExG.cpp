@@ -19,12 +19,15 @@ static struct sensor_msg msg_exg;
 // samples per second: 614400/(32*x) where x is the samplesPerSecondVal
 const SampleRateSetting<8> ExG::sample_rates = {
      // FS register values (written to filter reg)
-    { 75,    38,    19,    160,  60,   320,  384,  1     },
-    // ADC output data rate (combined both channels, integer SPS)
-    { 256,   505,   1010,  120,  320,  60,   50,   19200 },
-    // True per-channel SPS (= ODR / 2 due to CH0/CH1 time-multiplexing)
-    { 128.0, 252.5, 505.0, 60.0, 160.0, 30.0, 25.0, 9600.0 }
+    { 384,  160,  75,   60,   38,    19,    4,     1     },
+    // ADC output data rate, single-channel equivalent (= 19200 / FS)
+    { 50,   120,  256,  320,  505,   1010,  4800,  19200 },
+    // ACTUAL measured/predicted per-channel pair SPS (= ODR / 8, settling-tax included)
+    // Note: the actual SPS per channel should be ODR / 2
+    // The extra factor of 4 appears to be from the settling time of the filters?
+    { 6.25, 15.0, 32.0, 40.0, 63.16, 126.3, 600.0, 2400.0 }
 };
+
 
 bool ExG::init(struct k_msgq* queue) {
     if (!_active) {
@@ -75,19 +78,28 @@ bool ExG::init(struct k_msgq* queue) {
         goto fail_power;
     }
 
+    /*
+    if (adc->setConfig(1, AD7124::ReferenceSource::INTERNAL, AD7124::PGA::GAIN_1, true) != 0) {
+        LOG_ERR("Failed to configure setup 1");
+        goto fail_power;
+    }
+    if (adc->setFilter(1, AD7124::FilterType::SINC4, sample_rates.reg_vals[DEFAULT_SAMPLE_RATE_IDX], false, true) != 0) {
+        LOG_ERR("Failed to configure filter setup 1");
+        goto fail_power;
+    }
+    */
+
     k_msleep(10);
 
     // Configure filter for setup 0 (SINC4, 256 SPS by default)
-    if (adc->setFilter(0, AD7124::FilterType::SINC4, sample_rates.reg_vals[DEFAULT_SAMPLE_RATE_IDX], false) != 0) {
-        LOG_ERR("Failed to configure filter");
+    if (adc->setFilter(0, AD7124::FilterType::SINC4, sample_rates.reg_vals[DEFAULT_SAMPLE_RATE_IDX], false, true) != 0) {
+        LOG_ERR("Failed to configure filter setup 0");
         goto fail_power;
     }
-
     if (adc->setChannel(0, 0, AD7124::AnalogInput::AIN0, AD7124::AnalogInput::AIN1, true) != 0) {
         LOG_ERR("Failed to configure channel 0");
         goto fail_power;
     }
-
     if (adc->setChannel(1, 0,
                         AD7124::AnalogInput::AIN0,
                         AD7124::AnalogInput::AIN2, true) != 0) {
@@ -98,7 +110,6 @@ bool ExG::init(struct k_msgq* queue) {
     sensor_queue = queue;
 
     k_work_init(&sensor.sensor_work, update_sensor);
-    // k_timer_init(&sensor.sensor_timer, sensor_timer_handler, NULL);
 
     if (adc->enableReadyInterrupt(rdy_isr, &rdy_cb) != 0) {
         LOG_ERR("Failed to enable RDY interrupt");
@@ -120,9 +131,10 @@ bool ExG::init(struct k_msgq* queue) {
     return false;
 }
 
+
 void ExG::rdy_isr(const struct device *port, struct gpio_callback *cb, uint32_t pins) {
-  adc->maskReadyInterrupt();
-  k_work_submit(&sensor.sensor_work);
+    adc->maskReadyInterrupt();
+    k_work_submit(&sensor.sensor_work);
 }
 
 void ExG::update_sensor(struct k_work* work) {
@@ -202,26 +214,20 @@ void ExG::update_sensor(struct k_work* work) {
     batch_count = 0;
 }
 
-/*
-void ExG::sensor_timer_handler(struct k_timer* dummy) {
-    k_work_submit_to_queue(&sensor_work_q, &sensor.sensor_work);
-}
-*/
-
 void ExG::start(int sample_rate_idx) {
     if (!_active) return;
 
     // Update filter configuration for new sample rate
     uint16_t fs_val = sample_rates.reg_vals[sample_rate_idx];
-    if ((adc->setFilter(0, AD7124::FilterType::SINC4, fs_val, false)) != 0){
-      LOG_ERR("failed to set ADC filter in start()");
+    if ((adc->setFilter(0, AD7124::FilterType::SINC4, fs_val, false, true)) != 0){
+      LOG_ERR("failed to set ADC filter setup 0 in start()");
       return;
     }
 
-    // Calculate timer period
-    // k_timeout_t t = K_USEC(1e6 / sample_rates.true_sample_rates[sample_rate_idx]);
-
-    // k_timer_start(&sensor.sensor_timer, K_NO_WAIT, t);
+    /*if ((adc->setFilter(1, AD7124::FilterType::SINC4, fs_val, false, true)) != 0){
+      LOG_ERR("failed to set ADC filter setup 1 in start()");
+      return;
+    }*/
 
     ch_ready[0] = false;
     ch_ready[1] = false;
@@ -231,7 +237,7 @@ void ExG::start(int sample_rate_idx) {
 
     _running = true;
 
-    LOG_INF("ExG started — FS reg=%u, ODR=%u SPS combined, %.1f SPS/ch",
+    LOG_INF("Build C: ExG started — FS reg=%u, ODR=%u SPS combined, %.1f SPS/ch",
             fs_val,
             sample_rates.reg_vals[sample_rate_idx],  // same as fs_val, for clarity
             sample_rates.true_sample_rates[sample_rate_idx]);
@@ -243,8 +249,6 @@ void ExG::stop() {
     _running = false;
 
     adc->disableReadyInterrupt();
-
-    // k_timer_stop(&sensor.sensor_timer);
 
     // Put ADC in standby mode
     if (adc != nullptr) {

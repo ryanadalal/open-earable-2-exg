@@ -103,7 +103,7 @@ public:
     
     int setAdcControl(OperatingMode mode, PowerMode power_mode, bool ref_en = true);
     int setConfig(uint8_t setup, ReferenceSource ref, PGA gain, bool bipolar);
-    int setFilter(uint8_t setup, FilterType filter_type, uint16_t fs, bool rej60 = false);
+    int setFilter(uint8_t setup, FilterType filter_type, uint16_t fs, bool rej60 = false, bool single_cycle_settling = false);
     int setChannel(uint8_t ch, uint8_t setup, AnalogInput ainp, AnalogInput ainm, bool enable = false);
     
     int readRaw(int32_t *value, uint8_t *channel = nullptr);
