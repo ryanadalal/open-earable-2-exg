@@ -180,6 +180,11 @@ void ExG::update_sensor(struct k_work* work) {
       dt_us            = 0;
     }
 
+    batch[batch_count].ch0 = ch_val[0];
+    batch[batch_count].ch1 = ch_val[1];
+    batch[batch_count].dt_ms = static_cast<uint8_t>(dt_us / 1000);
+    batch_count++;
+
     if (batch_count < BATCH_SIZE) {
       return;
     }
