@@ -19,13 +19,13 @@ static struct sensor_msg msg_exg;
 // samples per second: 614400/(32*x) where x is the samplesPerSecondVal
 const SampleRateSetting<8> ExG::sample_rates = {
      // FS register values (written to filter reg)
-    { 384,  160,  75,   60,   38,    19,    4,     1     },
-    // ADC output data rate, single-channel equivalent (= 19200 / FS)
-    { 50,   120,  256,  320,  505,   1010,  4800,  19200 },
-    // ACTUAL measured/predicted per-channel pair SPS (= ODR / 8, settling-tax included)
-    // Note: the actual SPS per channel should be ODR / 2
-    // The extra factor of 4 appears to be from the settling time of the filters?
-    { 6.25, 15.0, 32.0, 40.0, 63.16, 126.3, 600.0, 2400.0 }
+    { 160,  80,   40,   20,    10,    3,  2,   1     },
+    // ADC data rate, single-channel equivalent (= 19200 / FS)
+    { 120,  240,  480,  960,   1920,  6400, 9600, 19200 },
+    // Measured per-channel pair SPS (= ODR / 8)
+    // The sinc4 filter requires 4 reads every channel switch
+    // Zero latency mode is automatically enabled when reading multiple channels
+    { 15.0, 30.0, 60.0, 120.0, 240.3, 800.0, 1200, 2400.0 }
 };
 
 
