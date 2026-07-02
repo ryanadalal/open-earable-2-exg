@@ -25,7 +25,7 @@ const SampleRateSetting<8> ExG::sample_rates = {
     // Measured per-channel pair SPS (= ODR / 8)
     // The sinc4 filter requires 4 reads every channel switch
     // Zero latency mode is automatically enabled when reading multiple channels
-    { 15.0, 30.0, 60.0, 120.0, 240.3, 800.0, 1200, 2400.0 }
+    { 15.0, 30.0, 60.0, 120.0, 240.0, 800.0, 1200, 2400.0 }
 };
 
 
